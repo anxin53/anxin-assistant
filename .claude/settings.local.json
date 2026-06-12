@@ -1,0 +1,11 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npm ping *)",
+      "Bash(npm install *)",
+      "Bash([ -d \"node_modules/$d\" ])",
+      "Bash(ELECTRON_SKIP_BINARY_DOWNLOAD=1 npm install)",
+      "Bash(npm run *)"
+    ]
+  }
+}
