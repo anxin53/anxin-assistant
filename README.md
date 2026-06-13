@@ -1,7 +1,7 @@
-# 安心助手 (Light Quality Tool)
+# 安心助手 (Anxin Assistant)
 
 <div align="center">
-  <p><em>轻量级 Windows 桌面工具，用于 GPU 显示名称管理和色彩配置</em></p>
+  <p><em>Windows 桌面应用，用于自定义 NVIDIA GPU 显示名称</em></p>
 </div>
 
 ## ✨ 功能特性
@@ -144,7 +144,7 @@ pnpm package
 ## 📁 项目结构
 
 ```
-Light Quality Tool/
+anxin-assistant/
 ├── electron/              # Electron 主进程代码
 │   ├── main/             # 主进程模块
 │   │   ├── index.ts      # 主进程入口
