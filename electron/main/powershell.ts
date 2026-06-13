@@ -10,32 +10,69 @@ export interface PowerShellResult {
 }
 
 const POWERSHELL = 'powershell.exe';
+let processElevated: Promise<boolean> | null = null;
 
 export function encodePowerShell(script: string): string {
   return Buffer.from(script, 'utf16le').toString('base64');
 }
 
-export function runPowerShell(script: string, elevated = false): Promise<PowerShellResult> {
-  if (!elevated) {
-    return new Promise((resolve, reject) => {
-      execFile(
-        POWERSHELL,
-        ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-EncodedCommand', encodePowerShell(script)],
-        { windowsHide: true, maxBuffer: 1024 * 1024 * 12 },
-        (error, stdout, stderr) => {
-          if (error) {
-            const failure = new Error(stderr || error.message);
-            reject(failure);
-            return;
-          }
-
-          resolve({ stdout, stderr });
-        }
-      );
-    });
+export function isCurrentProcessElevated(): Promise<boolean> {
+  if (process.platform !== 'win32') {
+    return Promise.resolve(false);
   }
 
-  return runElevatedScript(script);
+  if (!processElevated) {
+    const script = `
+([Security.Principal.WindowsPrincipal] [Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
+`;
+    processElevated = runPowerShellDirect(script)
+      .then((result) => result.stdout.trim().toLowerCase() === 'true')
+      .catch(() => false);
+  }
+
+  return processElevated;
+}
+
+export async function requestElevation(): Promise<void> {
+  const exePath = process.execPath;
+  const args = process.argv.slice(1).map(arg => `'${escapeSingle(arg)}'`).join(', ');
+
+  const script = `
+Start-Process -FilePath '${escapeSingle(exePath)}' -ArgumentList @(${args}) -Verb RunAs
+`;
+
+  await runPowerShellDirect(script);
+}
+
+export function runPowerShell(script: string, elevated = false): Promise<PowerShellResult> {
+  if (!elevated) {
+    return runPowerShellDirect(script);
+  }
+
+  return isCurrentProcessElevated().then((isElevated) => (isElevated ? runPowerShellDirect(script) : runElevatedScript(script)));
+}
+
+function runPowerShellDirect(script: string): Promise<PowerShellResult> {
+  return new Promise((resolve, reject) => {
+    execFile(
+      POWERSHELL,
+      ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-EncodedCommand', encodePowerShell(script)],
+      { windowsHide: true, maxBuffer: 1024 * 1024 * 12 },
+      (error, stdout, stderr) => {
+        if (error) {
+          const details = [stderr, stdout, error.message, `退出码：${error.code ?? '未知'}`]
+            .filter((item) => item && item.trim())
+            .join('\n')
+            .trim();
+          const failure = new Error(details || 'PowerShell 命令执行失败，但没有返回可读错误。');
+          reject(failure);
+          return;
+        }
+
+        resolve({ stdout, stderr });
+      }
+    );
+  });
 }
 
 function runElevatedScript(script: string): Promise<PowerShellResult> {
@@ -59,7 +96,11 @@ ${script}
   Set-Content -LiteralPath '${escapeSingle(stdoutPath)}' -Value $result -Encoding UTF8
   Set-Content -LiteralPath '${escapeSingle(exitPath)}' -Value '0' -Encoding UTF8
 } catch {
-  $_ | Out-String | Set-Content -LiteralPath '${escapeSingle(stderrPath)}' -Encoding UTF8
+  $message = if ($_.Exception -and $_.Exception.Message) { $_.Exception.Message } else { $_ | Out-String }
+  if (!$message -or ([string]$message).Trim() -eq '[object Object]') {
+    $message = $_ | Format-List * -Force | Out-String
+  }
+  [string]$message | Set-Content -LiteralPath '${escapeSingle(stderrPath)}' -Encoding UTF8
   Set-Content -LiteralPath '${escapeSingle(exitPath)}' -Value '1' -Encoding UTF8
 }
 `;

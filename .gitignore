@@ -5,18 +5,28 @@ node_modules/
 dist/
 dist-electron/
 release/
+build/
 
 # logs
 *.log
 npm-debug.log*
 pnpm-debug.log*
+yarn-debug.log*
+yarn-error.log*
 
 # editor / OS
 .DS_Store
 Thumbs.db
 .idea/
 .vscode/
+*.swp
+*.swo
+*~
 
 # local env
 .env
 .env.local
+.env.*.local
+
+# Claude Code
+.claude/

@@ -3,16 +3,7 @@ import path from 'path';
 import type { AppSettings } from '../shared/types';
 
 const defaultSettings: AppSettings = {
-  gpuBackups: {},
-  colorBackups: {},
-  importedProfiles: [],
-  filters: {
-    brightness: 0,
-    contrast: 0,
-    gamma: 1,
-    saturation: 0,
-    temperature: 0
-  }
+  gpuBackups: {}
 };
 
 let settingsPath = '';
@@ -40,13 +31,7 @@ export function getSettings(): AppSettings {
   return {
     ...defaultSettings,
     ...current,
-    filters: {
-      ...defaultSettings.filters,
-      ...(current.filters || {})
-    },
-    gpuBackups: current.gpuBackups || {},
-    colorBackups: current.colorBackups || {},
-    importedProfiles: current.importedProfiles || []
+    gpuBackups: current.gpuBackups || {}
   };
 }
 

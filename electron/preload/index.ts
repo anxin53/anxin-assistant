@@ -1,15 +1,11 @@
 import { contextBridge, ipcRenderer } from 'electron';
+import type { IpcRendererEvent } from 'electron';
 import type {
-  ApplyProfilePayload,
   AppSettings,
-  DisplayDevice,
   GpuAdapter,
   GpuBackup,
-  ImportedProfile,
-  ImportProfilePayload,
   OperationResult,
   RestoreGpuNamePayload,
-  RestoreProfilePayload,
   SetGpuNamePayload
 } from '../shared/types';
 
@@ -21,16 +17,21 @@ const api = {
     restoreAdapterName: (payload: RestoreGpuNamePayload): Promise<OperationResult> =>
       ipcRenderer.invoke('gpu:restoreAdapterName', payload)
   },
-  color: {
-    listDisplays: (): Promise<DisplayDevice[]> => ipcRenderer.invoke('color:listDisplays'),
-    pickProfile: (): Promise<string | null> => ipcRenderer.invoke('dialog:pickProfile'),
-    importProfile: (payload: ImportProfilePayload): Promise<ImportedProfile> => ipcRenderer.invoke('color:importProfile', payload),
-    applyProfile: (payload: ApplyProfilePayload): Promise<OperationResult> => ipcRenderer.invoke('color:applyProfile', payload),
-    restoreProfile: (payload: RestoreProfilePayload): Promise<OperationResult> => ipcRenderer.invoke('color:restoreProfile', payload)
-  },
   settings: {
     get: (): Promise<AppSettings> => ipcRenderer.invoke('settings:get'),
     set: (settings: AppSettings): Promise<AppSettings> => ipcRenderer.invoke('settings:set', settings)
+  },
+  window: {
+    minimize: (): Promise<void> => ipcRenderer.invoke('window:minimize'),
+    toggleMaximize: (): Promise<boolean> => ipcRenderer.invoke('window:toggleMaximize'),
+    close: (): Promise<void> => ipcRenderer.invoke('window:close'),
+    isMaximized: (): Promise<boolean> => ipcRenderer.invoke('window:isMaximized'),
+    rendererReady: (): void => ipcRenderer.send('window:rendererReady'),
+    onMaximizedChange: (callback: (maximized: boolean) => void): (() => void) => {
+      const listener = (_event: IpcRendererEvent, maximized: boolean) => callback(maximized);
+      ipcRenderer.on('window:maximized-change', listener);
+      return () => ipcRenderer.removeListener('window:maximized-change', listener);
+    }
   }
 };
 

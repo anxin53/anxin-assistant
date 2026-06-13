@@ -8,6 +8,7 @@ export interface GpuAdapter {
   videoProcessor?: string;
   deviceDesc?: string;
   friendlyName?: string;
+  isLaptop?: boolean;
 }
 
 export interface GpuBackup {
@@ -20,42 +21,8 @@ export interface GpuBackup {
   backedUpAt: string;
 }
 
-export interface DisplayDevice {
-  id: string;
-  deviceName: string;
-  monitorName: string;
-  primary: boolean;
-  currentProfile?: string;
-}
-
-export interface ImportedProfile {
-  id: string;
-  sourcePath: string;
-  installedPath: string;
-  fileName: string;
-  importedAt: string;
-}
-
-export interface ColorBackup {
-  displayId: string;
-  deviceName: string;
-  previousProfile?: string;
-  backedUpAt: string;
-}
-
-export interface FilterSettings {
-  brightness: number;
-  contrast: number;
-  gamma: number;
-  saturation: number;
-  temperature: number;
-}
-
 export interface AppSettings {
   gpuBackups: Record<string, GpuBackup>;
-  colorBackups: Record<string, ColorBackup>;
-  importedProfiles: ImportedProfile[];
-  filters: FilterSettings;
 }
 
 export interface OperationResult {

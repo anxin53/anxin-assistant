@@ -57,13 +57,30 @@
     border-color: var(--border);
     outline-color: var(--ring);
   }
+  html,
+  body,
+  #root {
+    width: 100%;
+    height: 100%;
+  }
   body {
     margin: 0;
-    background-color: var(--background);
+    overflow: hidden;
+    background-color: #edf4ff;
     color: var(--foreground);
     font-family: "Segoe UI", "Microsoft YaHei UI", Arial, sans-serif;
     font-synthesis: none;
     text-rendering: optimizeLegibility;
     -webkit-font-smoothing: antialiased;
+  }
+}
+
+@layer utilities {
+  .app-region-drag {
+    -webkit-app-region: drag;
+  }
+
+  .app-region-no-drag {
+    -webkit-app-region: no-drag;
   }
 }

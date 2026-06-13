@@ -5,6 +5,20 @@ import { psString, runPowerShell } from './powershell';
 
 export async function listAdapters(): Promise<GpuAdapter[]> {
   const script = `
+$laptopChassisTypes = @(8, 9, 10, 11, 12, 14, 18, 21, 30, 31, 32)
+$chassisTypes = @()
+try {
+  $chassisTypes = @(Get-CimInstance Win32_SystemEnclosure -ErrorAction SilentlyContinue |
+    ForEach-Object { $_.ChassisTypes } |
+    Where-Object { $_ })
+} catch {}
+$hasLaptopChassis = @($chassisTypes | Where-Object { $laptopChassisTypes -contains [int]$_ }).Count -gt 0
+$hasBattery = $false
+try {
+  $hasBattery = [bool](Get-CimInstance Win32_Battery -ErrorAction SilentlyContinue)
+} catch {}
+$isLaptop = $hasLaptopChassis -or $hasBattery
+
 $items = Get-CimInstance Win32_VideoController |
   Where-Object {
     $_.AdapterCompatibility -like '*NVIDIA*' -or
@@ -28,6 +42,7 @@ $items = Get-CimInstance Win32_VideoController |
     videoProcessor = $_.VideoProcessor
     deviceDesc = if ($props) { $props.DeviceDesc } else { $null }
     friendlyName = if ($props) { $props.FriendlyName } else { $null }
+    isLaptop = $isLaptop
   }
 }
 $items | ConvertTo-Json -Compress
@@ -47,7 +62,8 @@ $items | ConvertTo-Json -Compress
       driverVersion: row.driverVersion,
       videoProcessor: row.videoProcessor,
       deviceDesc: row.deviceDesc,
-      friendlyName: row.friendlyName
+      friendlyName: row.friendlyName,
+      isLaptop: Boolean(row.isLaptop)
     }));
 }
 
@@ -115,34 +131,48 @@ export async function restoreAdapterName(payload: RestoreGpuNamePayload): Promis
 }
 
 async function writeGpuRegistryValues(registryKey: string, deviceDesc: string, friendlyName?: string): Promise<void> {
+  const registryPath = toRegExePath(registryKey);
   const script = `
-$path = ${psString(registryKey)}
-if (!(Test-Path -LiteralPath $path)) { throw "注册表路径不存在：$path" }
-$acl = Get-Acl -LiteralPath $path
-$snapshot = $acl.Sddl
-$identity = [System.Security.Principal.WindowsIdentity]::GetCurrent().Name
-$rule = New-Object System.Security.AccessControl.RegistryAccessRule(
-  $identity,
-  [System.Security.AccessControl.RegistryRights]::FullControl,
-  [System.Security.AccessControl.InheritanceFlags]::None,
-  [System.Security.AccessControl.PropagationFlags]::None,
-  [System.Security.AccessControl.AccessControlType]::Allow
-)
-try {
-  $acl.SetAccessRule($rule)
-  Set-Acl -LiteralPath $path -AclObject $acl
-  New-ItemProperty -LiteralPath $path -Name 'DeviceDesc' -Value ${psString(deviceDesc)} -PropertyType String -Force | Out-Null
-  $hasFriendlyName = (Get-ItemProperty -LiteralPath $path).PSObject.Properties.Name -contains 'FriendlyName'
-  if ($hasFriendlyName) {
-    New-ItemProperty -LiteralPath $path -Name 'FriendlyName' -Value ${psString(friendlyName || deviceDesc)} -PropertyType String -Force | Out-Null
+$regPath = ${psString(registryPath)}
+$deviceDesc = ${psString(deviceDesc)}
+$friendlyName = ${psString(friendlyName || deviceDesc)}
+
+function Invoke-Reg {
+  param(
+    [string[]]$Arguments,
+    [string]$FailureMessage
+  )
+
+  $output = & reg.exe @Arguments 2>&1 | Out-String
+  if ($LASTEXITCODE -ne 0) {
+    throw ($FailureMessage + [Environment]::NewLine + $output)
   }
-} finally {
-  $restore = Get-Acl -LiteralPath $path
-  $restore.SetSecurityDescriptorSddlForm($snapshot)
-  Set-Acl -LiteralPath $path -AclObject $restore
+
+  return $output
 }
+
+Invoke-Reg -Arguments @('query', $regPath) -FailureMessage "注册表路径不存在或不可访问：$regPath" | Out-Null
+Invoke-Reg -Arguments @('add', $regPath, '/v', 'DeviceDesc', '/t', 'REG_SZ', '/d', $deviceDesc, '/f') -FailureMessage "写入 DeviceDesc 失败：$regPath" | Out-Null
+Invoke-Reg -Arguments @('add', $regPath, '/v', 'FriendlyName', '/t', 'REG_SZ', '/d', $friendlyName, '/f') -FailureMessage "写入 FriendlyName 失败：$regPath" | Out-Null
 `;
   await runPowerShell(script, true);
+}
+
+function toRegExePath(registryKey: string): string {
+  const trimmed = registryKey.trim();
+  if (/^Registry::HKEY_LOCAL_MACHINE\\/iu.test(trimmed)) {
+    return trimmed.replace(/^Registry::HKEY_LOCAL_MACHINE\\/iu, 'HKLM\\');
+  }
+
+  if (/^HKLM:\\/iu.test(trimmed)) {
+    return trimmed.replace(/^HKLM:\\/iu, 'HKLM\\');
+  }
+
+  if (/^HKEY_LOCAL_MACHINE\\/iu.test(trimmed)) {
+    return trimmed.replace(/^HKEY_LOCAL_MACHINE\\/iu, 'HKLM\\');
+  }
+
+  return trimmed;
 }
 
 function hashId(value: string): string {
